@@ -1,0 +1,39 @@
+DB_NAME='clean'
+DB_USERNAME='test'
+DB_PORT='1921'
+DB_HOST='pgm-test.pgsql.kualalumpur.rds.aliyuncs.com'
+DB_PASSWORD='2'
+
+JWT_SECRET='justasecret'
+
+BUCKETNAME='clean'
+REGION='ap-southeast-1'
+
+ACCESS_KEYID='1'
+SECRET_ACCESSKEY='1'
+
+rmClientSecret='1'
+rmClientID='1'
+rmStoreId='1'
+
+REDIRECT_URL='https://app.test.com.my/'
+NOTIFY_URL='https://app.test.com.my/'
+
+# revenue monster API
+RM_TOKEN_URL=https://oauth.revenuemonster.my/v1/token
+RM_PAYMENT_URL=https://open.revenuemonster.my/v3/payment/online
+RM_GENSIGN=https://open.revenuemonster.my/tool/signature/generate
+
+NODE_ENV ='DEV'
+
+lockerClientId= "1"
+lockerClientSecret = "1"
+lockerURL = 'http://test.com/api/v1'
+
+scheduler =no
+email = true
+SMSTYPE ='SMSHUBS'
+APICOMPANY='clean'
+APIUSERNAME="js.tew@antlysis.com"
+APIPASSWORD="1"
+MAIL_PASS='1'
