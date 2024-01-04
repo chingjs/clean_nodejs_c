@@ -3,8 +3,6 @@ require('dotenv').config();
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const catchSync = require('express-async-handler');
-const { checkNumber } = require('../../configs/function/validate');
 
 const Customer = require('../../configs/tables/Customer');
 const Operator = require('../../configs/tables/Operator');
@@ -43,8 +41,6 @@ router.post('/login', (req, res) => {
   Customer.findOne({ where: { phone_number: phone_number, verified: true } })
     .then((foundCustomer) => {
       if (!foundCustomer) {
-        console.error('User phone not found after sso pass');
-        console.error(req.body);
         return res
           .status(400)
           .json({
@@ -79,25 +75,6 @@ router.post('/login', (req, res) => {
             }
           );
         });
-        // jwt.sign(
-        //   { id: foundCustomer.id },
-        //   process.env.JWT_SECRET,
-        //   { expiresIn: '6h' },
-        //   (err, token) => {
-        //     if (err) {
-        //       console.error(
-        //         'Error when signing customer token in customer login'
-        //       );
-        //       console.error(err);
-        //       return res.status(400).json({ error: 'Internal Error' });
-        //     }
-        //     const returnThis = {
-        //       token,
-        //       user: foundCustomer,
-        //     };
-        //     return res.status(200).json(returnThis);
-        //   }
-        // );
       }
     })
     .catch((err) => {
@@ -113,7 +90,6 @@ router.post('/login', (req, res) => {
 
 router.post('/resendOtp', (req, res) => {
   const { phone } = req.body;
-  const operatorId = req.body.operatorCode;
   Customer.findOne({ where: { phone_number: phone } })
     .then((foundRecord) => {
       if (!foundRecord) {

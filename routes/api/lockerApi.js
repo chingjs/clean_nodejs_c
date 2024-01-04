@@ -73,8 +73,6 @@ router.post('/getAll', async (req, res) => {
         used: totalUsed,
         empty: totalEmpty,
       };
-
-      // console.log(lockerSummary)
       lockerdata.push(lockerSummary);
     }
 
@@ -134,7 +132,6 @@ router.post('/getEmptyByLocation', (req, res) => {
 // POST @-> /api/locker/details
 router.post('/details/getAll', (req, res) => {
   const { lockerId } = req.body;
-  // console.log('check lockerid', lockerId);
   if (!lockerId) {
     return res.status(400).json('Locker ID EMPTY!');
   }
@@ -142,18 +139,15 @@ router.post('/details/getAll', (req, res) => {
     const encoded = Buffer.from(
       `${process.env.lockerClientId}:${process.env.lockerClientSecret}`
     ).toString('base64');
-    // console.log("data", dataURL)
     const headers = {
       'Content-Type': 'application/json',
       Authorization: `Basic ${encoded}`,
     };
-    // console.log('header', headers);
     fetch(`${dataURL.url}/lockers/GetAll`, {
       headers,
     })
       .then((res) => res.json())
       .then((data) => {
-        // console.log("data", data)
         const totalOnline = data.filter((total) => total.lock === true);
         const totalUsed = data.filter((used) => used.empty === false);
         const totalEmpty = data.filter((empty) => empty.empty === true);
@@ -172,33 +166,6 @@ router.post('/details/getAll', (req, res) => {
   });
 });
 
-// GET TOTAL,STATUS,EMPTY FALSE, EMPTY TRUE
-// POST @-> /api/locker/lockerReport
-router.get('/lockerReport', (req, res) => {
-  const getLocker = Locker.findAll()
-    .then((data) => {
-      const totalOnline = data.filter((total) => total.status === true);
-      const totalUsed = data.filter((used) => used.empty === false);
-      const totalEmpty = data.filter((empty) => empty.empty === true);
-
-      const lockerSummary = {
-        total: data.length,
-        online: totalOnline.length,
-        used: totalUsed.reduce(
-          (max, b) => (max = max.total > b.total ? max : b)
-        ),
-        empty: totalEmpty.reduce(
-          (max, b) => (max = max.total > b.total ? max : b)
-        ),
-      };
-      // console.log("summary", lockerSummary)
-    })
-    .then((result) => {
-      return res.status(200).json({ lockerSummary: result });
-    })
-    .catch((err) => err);
-});
-
 // CHECK ONE LOCKER STATUS
 // POST @-> /api/locker/checkonelocker
 router.post('/checkonelocker', async (req, res) => {
@@ -211,7 +178,6 @@ router.post('/checkonelocker', async (req, res) => {
     if (status === 'updated') {
       LockerDetails.findOne({ where: { name: LockerNo } })
         .then((data) => {
-          // console.log('check locked status', data);
           if (data.lock) {
             socketIo().in('admin').emit('locker-success', 'success');
             return res.status(200).json({ message: 'Closed' });
@@ -237,8 +203,6 @@ router.post('/checkonelocker', async (req, res) => {
 // POST @-> /api/locker/checkemptylocker
 router.post('/checkemptylocker', async (req, res) => {
   const { lockerId } = req.body;
-  // console.log('Locker Id: ', lockerId);
-  // console.log('checkemptylocker');
   const foundLocker = await Locker.findOne({ where: { id: lockerId } });
   if (!foundLocker) {
     return res.status(400).json({ error: 'Locker not found' });
@@ -311,7 +275,6 @@ router.post('/checksmalllocker', (req, res) => {
           if (!data.length) {
             return res.status(400).json({ error: 'lockerID not found' });
           }
-          // console.log("data", data)
           return res.status(200).json(data);
         })
         .catch((err) => {
@@ -327,22 +290,20 @@ router.post('/checksmalllocker', (req, res) => {
     // }
   });
 });
+
 // CHECK all LOCKER in own database
 // POST @-> /api/locker/checkemptylocker
 router.post('/checkalllocker', (req, res) => {
   const { lockerId } = req.body;
   syncLockerSlot(lockerId, (status) => {
-    // console.log('check all locker status', status);
     if (status === 'updated') {
       LockerDetails.findAll({ where: { lockerId }, order: [['name', 'ASC']] })
         .then((data) => {
           if (data) {
-            // console.log('have all data', data);
             return res.status(200).json({ data: data });
           }
         })
-        .catch((err) => {
-          // console.log("locker", err)
+        .catch(() => {
           return res.status(400).json({ error: 'wrong data' });
         });
     } else {
@@ -373,7 +334,6 @@ router.post('/updateReserved', (req, res) => {
       if (!lockerData) {
         res.status(400).json({ error: 'locker not found!' });
       } else {
-        // console.log(lockerData)
         lockerData.booking = false;
         lockerData.reserved = status;
         lockerData.save().then((saved) => {
@@ -392,7 +352,6 @@ router.post('/updateReserved', (req, res) => {
 // POST @-> /api/locker/updateBooking
 router.post('/updateBooking', async (req, res) => {
   const { location, lockerNo } = req.body;
-  // console.log('req', req.body);
   if (lockerNo) {
     const lockerData = await LockerDetails.findOne({
       where: { location, name: lockerNo },
@@ -430,7 +389,6 @@ router.post('/resetLocker', async (req, res) => {
 // POST @-> /api/locker/getLocation
 // To GET LOCATION DETAIL
 router.get('/getLocation', (req, res) => {
-  // const { state } = req.body;
   Locker.findAll({ where: { status: true } })
     .then((foundRecord) => {
       if (!foundRecord.length) {
@@ -466,46 +424,8 @@ router.get('/getLocation', (req, res) => {
     });
 });
 
-// Testing
-// router.post('/syncTest', (req, res) => {
-//   const { lockerId } = req.body;
-//   try {
-//     if (!lockerId) {
-//       return res.status(400).json('lockerId not found.');
-//     };
-
-//     syncLockerSlot(lockerId, (status) => {
-//       if (status === 'updated') {
-//         LockerDetails.findAll({ where: { lockerId: lockerId }, order: [['name', 'ASC']] })
-//           .then((data) => {
-//             if (data) {
-//               // const updatedData = data.map((item) => {
-//               //   const updatedItem = status.data.find((updated) => updated.id === item.id);
-//               //   if (updatedItem) {
-//               //     item.lock = updatedItem.lock;
-//               //     item.empty = updatedItem.empty;
-//               //   }
-//               //   return item;
-//               // });
-//               res.status(200).json(data);
-//             }
-//           })
-//           .catch((err) => {
-//             res.status(400).json();
-//           });
-//       } else {
-//         return res.status(400).json({ error: 'Sync locker slot error.' });
-//       }
-//     });
-//   }
-//   catch (error) {
-//     return res.status(400).json({ error: 'Internal Error.' });
-//   };
-// });
-
 // OPEN 1 LOCKER
 // POST @-> /api/locker/unlock
-
 router.post('/unlock', (req, res) => {
   const { lockerId, location } = req.body;
 
@@ -530,7 +450,6 @@ router.post('/unlock', (req, res) => {
           })
             .then((res) => res.json())
             .then((response) => {
-              // console.log(response);
               if (!response) {
                 // Add here
                 SlackError(
@@ -543,13 +462,7 @@ router.post('/unlock', (req, res) => {
                     });
                   }
                 );
-                // return res.status(400).json({
-                //   error:
-                //     'Network error. Please wait a few minutes before you try again.',
-                // });
               }
-
-              // console.log('helloworld');
               LockerDetails.findOne({
                 where: { location, name: lockerId },
               }).then((foundLocker) => {
@@ -585,8 +498,7 @@ router.post('/unlock', (req, res) => {
                   });
                 }
               );
-              // return res.status(400).json({ error: "Network error. Please wait a few minutes before you try again." });
-            });
+           });
         } else if (found.deviceId) {
           bufferCheck(lockerId, location, (checkTime) => {
             if (checkTime === 'Success') {
@@ -644,7 +556,7 @@ router.post('/unlock', (req, res) => {
                     }
                     updateSlot.reserved = false;
                     updateSlot.booking = false;
-                    // updateSlot.lock = false;
+
                     const updatedSlot = await updateSlot.save();
                     if (updatedSlot) {
                       socketIo()
@@ -653,8 +565,7 @@ router.post('/unlock', (req, res) => {
                       socketIo().in('admin').emit('locker-success', 'success');
                       return res.status(200).json({ success: updateSlot });
                     }
-                    // return res.status(408).json({ error: 'Network error. Please wait a few minutes before you try again.' });
-                    else {
+                     else {
                       SlackError(
                         'Network error. Please wait a few minutes before you try again.',
                         err,
@@ -675,8 +586,7 @@ router.post('/unlock', (req, res) => {
                   });
                 });
             } else {
-              // return res.status(400).json({ error: "Network error. Please wait a few minutes before you try again." });
-              SlackError(
+               SlackError(
                 `${location}: Network error. Please wait a few minutes before you try again.`,
                 'Error',
                 () => {
@@ -761,7 +671,6 @@ router.post('/create', (req, res) => {
 
 router.post('/update', async (req, res) => {
   const { id, strategy } = req.body;
-  // console.log('update locker', req.body);
   try {
     const checkLocker = await Locker.findOne({ where: { id } });
     if (!checkLocker) res.status(400).json({ error: 'locker not found!' });
@@ -820,7 +729,7 @@ router.post('/updateStatus', async (req, res) => {
   }
   foundLocker.status = true;
   const message = `The ${foundLocker.name} locker is Online.`;
-  sendSMS('', message, 'Online', (status) => {});
+  sendSMS('', message, 'Online', () => {});
 
   const foundSlot = await LockerDetails.findAll({
     where: { lockerId: foundLocker.id },
@@ -834,15 +743,10 @@ router.post('/updateStatus', async (req, res) => {
     let check = data.filter((d) => d.name === `Locker_${foundSlot[i].name}`)[0];
 
     if (check) {
-      // console.log('match', foundSlot[i].name, check.name);
       foundSlot[i].lock = check.lock;
       foundSlot[i].empty = !check.sensor;
       await foundSlot[i].save();
     } else {
-      console.log('locker name error', foundSlot[i].name, foundLocker.location);
-      //   return res
-      //     .status(400)
-      //     .json({ error: 'Error updating locker slot status' });
       errorSlot.push(foundSlot[i].name);
     }
   }
@@ -855,7 +759,6 @@ router.post('/updateStatus', async (req, res) => {
 });
 
 router.post('/getDevice', async (req, res) => {
-  // const { deviceId } = req.body;
   let data = [];
   const foundLocker = await Locker.findAll({
     where: { deviceId: { [Op.ne]: null } },
@@ -882,7 +785,6 @@ router.post('/getDevice', async (req, res) => {
     data.push({ configure });
     data.push({ configure: { ...configure, ID: '1234' } });
   }
-  // console.log('data', data);
   return res.status(200).json({ data });
 });
 module.exports = router;

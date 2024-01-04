@@ -1,11 +1,7 @@
 require('dotenv').config();
 const express = require('express');
-// const async = require('async');
-// const moment = require('moment');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-
-const Code = require('../../configs/tables/Code');
 const Admin = require('../../configs/tables/Admin');
 const Order = require('../../configs/tables/Order');
 const Roles = require('../../configs/tables/Roles');
@@ -17,11 +13,8 @@ const Enquiry = require('../../configs/tables/Enquiry');
 const Operator = require('../../configs/tables/Operator');
 const Customer = require('../../configs/tables/Customer');
 const RedeemCode = require('../../configs/tables/RedeemCode');
-const ServiceType = require('../../configs/tables/ServiceTypes');
 const OrderDetails = require('../../configs/tables/OrderDetails');
 
-// const fs = require('fs');
-// const path = require('path');
 const { Op } = require('sequelize');
 const moment = require('moment');
 const sequelize = require('../../configs/sequelize');
@@ -49,7 +42,6 @@ router.post('/verifyToken', async (req, res) => {
 
     jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
       if (err) {
-        // console.error("Token authorized but error : \n", err);
         return res.status(401).json({ error: "Token is invalid" });
       }
       return res.status(200).json({ data: decoded })
@@ -144,7 +136,6 @@ router.post('/getAdminUser', async (req, res) => {
 
 router.post('/createAdminUser', async (req, res) => {
   const { username, password, newpassword, email, type, currentUser, location } = req.body;
-  // console.log(username, password, newpassword, email, type, currentUser, location)
   const salt = bcrypt.genSaltSync(13);
   const hash = bcrypt.hashSync(password, salt);
   if (!username || !password || !currentUser || !location.length) {
@@ -166,9 +157,6 @@ router.post('/createAdminUser', async (req, res) => {
         username, password: hash, email: email ? email : null, type, status: true, createdBy: currentUser
       });
 
-      // const newRecord = Admin.build({
-      //   username, password: hash, email, type, status: true, createdBy: currentUser
-      // });
       await newRecord.save()
       for (let l = 0; l < location.length; l++) {
         let d = location[l];
@@ -234,7 +222,6 @@ router.post('/createAdminUser', async (req, res) => {
       for (let l = 0; l < location.length; l++) {
         let d = location[l];
         if (type === 'INVESTOR') {
-          // console.log('create investor', d.location)
           Roles.bulkCreate([
             { name: 'LockerStatus', category: 'home', type: 'ALL', status: false, adminId: checkRecord.id, location: d.location },
             { name: 'OrderManagement', category: 'home', type: 'ALL', status: false, adminId: checkRecord.id, location: d.location },
@@ -257,8 +244,6 @@ router.post('/createAdminUser', async (req, res) => {
           ]);
         }
         if (type === 'SERVICE PROVIDER') {
-          // console.log('service', d.location)
-
           Roles.bulkCreate([
             { name: 'LockerStatus', category: 'home', type: 'ALL', status: true, adminId: checkRecord.id, location: d.location },
             { name: 'OrderManagement', category: 'home', type: 'ALL', status: true, adminId: checkRecord.id, location: d.location },
@@ -325,10 +310,8 @@ router.post("/removeAdminUser", async (req, res) => {
 // POST @-> /api/admin/overview
 // To get all today details
 router.post('/overview', async (req, res) => {
-  // const { startDate, endDate } = req.body;
-  let startDate = req.body.startDate ? req.body.startDate : new Date().getDate()-7
+  let startDate = req.body.startDate ? req.body.startDate : new Date().getDate() - 7
   let endDate = req.body.endDate ? req.body.endDate : new Date()
-  // console.log('start', req.body)
   try {
     const orders = await Order.findAll({
       where: {
@@ -344,7 +327,6 @@ router.post('/overview', async (req, res) => {
     for (let i = 0; i < orders.length; i++) {
       let amount = 0;
       const order = orders[i];
-      // console.log('order', order);
       const orderDate = new Date(order.createdAt).toLocaleDateString();
 
       const checkDetails = await OrderDetails.findAll({ where: { orderId: order.id } })
@@ -370,7 +352,6 @@ router.post('/overview', async (req, res) => {
       ...data[date],
       date,
     }));
-    // console.log(data)
 
     return res.status(200).json(data);
   }
@@ -403,8 +384,8 @@ router.post('/enquiry/edit', (req, res) => {
   const { id, status } = req.body;
   Enquiry.findByPk(id)
     .then((foundRecord) => {
-      if(!foundRecord){
-        return res.status(400).json({error:"Enquiry not found"})
+      if (!foundRecord) {
+        return res.status(400).json({ error: "Enquiry not found" })
       }
       foundRecord.status = status === 'Processed' ? true : false;
       foundRecord.save().then((savedRecord) => {
@@ -433,7 +414,6 @@ router.get('/userReport', (req, res) => {
           return amt.price;
         });
         const sumSpent = allSpent.reduce((a, b) => a + b, 0);
-        // console.log('checkData', data[0].orders[0]); // type=== 'Wash + Iron'
         const calGarment = user.orders.filter((item) => {
           return item.serviceType == 'Garment' && item.cancel != true && item.payment === true;
         });
@@ -465,7 +445,6 @@ router.get('/userReport', (req, res) => {
             0
           ),
         };
-        // console.log('newData', newData);
         return newData;
       });
       return res.status(200).json(userReport);
@@ -481,9 +460,9 @@ router.get('/userReport', (req, res) => {
 // POST @-> /api/admin/service/sales
 // To get monthly service sales
 router.post('/service/sales', (req, res) => {
-  let startDate = req.body.startDate ? req.body.startDate : new Date().getDate()-7
+  let startDate = req.body.startDate ? req.body.startDate : new Date().getDate() - 7
   let endDate = req.body.endDate ? req.body.endDate : new Date()
- 
+
   Order.findAll({
     where: {
       payment: true,
@@ -547,7 +526,6 @@ router.post('/service/sales', (req, res) => {
           amount: calShoe.toFixed(2),
         },
       ];
-      // console.log('newData', newData);
 
       return res
         .status(200)
@@ -564,7 +542,6 @@ router.post('/service/sales', (req, res) => {
 // POST @-> /api/operator/viewAll
 // To view all operator details
 router.post('/operator/getAll', async (req, res) => {
-  const { status } = req.body;
   try {
     const allAdmin = await Admin.findAll({})
     const checkDriver = await Operator.findAll({ where: { status: 'Active' } })
@@ -596,10 +573,6 @@ router.post('/operator/edit', async (req, res) => {
     full_name,
     email, adminName } = req.body;
 
-
-  // Operator.findOne({
-  //   where: { email, phone_number }
-  // }).then((found) => { if (found) return res.status(400).json({ error: "Existing Email or phone" }) })
   const foundAdmin = await Admin.findOne({ where: { username: adminName } })
   if (!foundAdmin) {
     return res.status(400).json({ error: 'Admin not found' })
@@ -630,7 +603,6 @@ router.post('/operator/edit', async (req, res) => {
 // To get all PAYMENT details
 router.post('/payment/getAll', async (req, res) => {
   const { startDate, endDate, location, type } = req.body;
-  //console.log('req', req.body)
   let stDate = ''
   let edDate = ''
   if (!startDate || !endDate) {
@@ -649,11 +621,7 @@ router.post('/payment/getAll', async (req, res) => {
     },
     order: [["createdAt", "DESC"]],
     include: [{
-      model: Order,
-      // where: {
-      //   cancel: false,
-      // },
-
+      model: Order
     }],
   }
 
@@ -669,25 +637,6 @@ router.post('/payment/getAll', async (req, res) => {
     const getAllOrder = await Order.findAll()
     const getAllPayment = await Payment.findAll(query)
 
-    // if (getAllPayment.length) {
-    //   let typeData = []
-    //   for (let a = 0; a < getAllPayment.length; a++) {
-    //     if (!typeData.includes(getAllPayment[a].method)) {
-    //       typeData.push(getAllPayment[a].method)
-    //     }
-    //   }
-    //   let filterData = getAllPayment.map(a => {
-    //     console.log(a.dataValues)
-    //     return {
-    //       ...a.dataValues,
-    //       location: getAllOrder.filter(o => o.oid === a.oid)[0]?.location,
-    //     }
-    //   })
-    //   return res.status(200).json({ paymentList: filterData, paymentType: typeData });
-    // }
-    // else {
-    //   return res.status(200).json({ paymentList: [] });
-    // }
     if (getAllPayment.length) {
       let typeData = [];
       let transactionIds = [];
@@ -701,10 +650,6 @@ router.post('/payment/getAll', async (req, res) => {
             location: getAllOrder.find(order => order.oid === payment.oid)?.location || null,
           });
         }
-        // filtered.push({
-        //   ...payment.dataValues,
-        //   location: getAllOrder.find(order => order.oid === payment.oid)?.location || null,
-        // });
         return filtered;
       }, []);
 
@@ -713,17 +658,6 @@ router.post('/payment/getAll', async (req, res) => {
           typeData.push(payment.method);
         }
       });
-
-      // const newItem = {
-      //   date: 'Total',
-      //   // qty: filterData.map(s => { return parseInt(s.qty) }).reduce((a, b) => a + b, 0),
-      //   // amount: filterData.map(s => { return s.amount }).reduce((a, b) => a + b, 0),
-      //   // netTotal: filterData.map(s => { return s.amount }).reduce((a, b) => a + b, 0),
-      // }
-
-      // filterData.push(newItem)
-
-      // console.log(newItem)
 
       return res.status(200).json({ paymentList: filterData, paymentType: typeData });
     } else {
@@ -787,7 +721,6 @@ router.post('/item/getAll', async (req, res) => {
           total: a.price * a.qty,
         }
       })
-      // console.log(filterData)
       const newItem = {
         date: 'Total',
         qty: filterData.map(s => { return parseInt(s.qty) }).reduce((a, b) => a + b, 0),
@@ -831,9 +764,6 @@ router.post('/category/getAll', async (req, res) => {
     },
     include: {
       model: OrderDetails,
-      // where: {
-      //   cancel: false
-      // }
     },
     order: [["createdAt", "DESC"]]
   }
@@ -860,7 +790,6 @@ router.post('/category/getAll', async (req, res) => {
         let totalCancelQty = 0;
         if (order.order_details.length) {
           totalCancelQty = order.order_details.reduce((total, detail) => {
-            // console.log(detail.dataValues.cancel)
             if (detail.dataValues.cancel === true) {
               return total + detail.dataValues.qty;
             }
@@ -868,14 +797,12 @@ router.post('/category/getAll', async (req, res) => {
           }, 0);
 
           totalCancelAmount = order.order_details.reduce((total, detail) => {
-            // console.log(detail.dataValues.cancel)
             if (detail.dataValues.cancel === true) {
               return total + (detail.dataValues.price * detail.dataValues.qty);
             }
             return total;
           }, 0);
         }
-        // console.log(totalCancelQty, totalCancelAmount);
 
         if (!categoryData.includes(order.serviceType)) {
           categoryData.push(order.serviceType)
@@ -887,7 +814,6 @@ router.post('/category/getAll', async (req, res) => {
 
         let obj = {
           ...order.dataValues,
-          // refundAmount: refundTotal
           totalCancelQty: totalCancelQty,
           totalCancelAmount: totalCancelAmount,
         }
@@ -897,8 +823,6 @@ router.post('/category/getAll', async (req, res) => {
 
         returnData.push(obj);
       }
-
-      // console.log(cancel, qty);
       const newCategory = {
         totalCancelAmount: cancelAmount,
         totalCancelQty: qty,
@@ -915,32 +839,6 @@ router.post('/category/getAll', async (req, res) => {
       return res.status(200).json({ categoryList: [] });
     }
 
-    // if (getAllCategory.length) {
-    //   let categoryData = []
-    //   let locationData = []
-
-    //   for (let a = 0; a < getAllCategory.length; a++) {
-    //     if (!categoryData.includes(getAllCategory[a].serviceType)) {
-    //       categoryData.push(getAllCategory[a].serviceType)
-    //     }
-    //     if (!locationData.includes(getAllCategory[a].location)) {
-    //       locationData.push(getAllCategory[a].location)
-    //     }
-    //   }
-    //   const newCategory = {
-    //     date: 'Total',
-    //     quantity: getAllCategory.map(s => { return parseInt(s.quantity) }).reduce((a, b) => a + b, 0),
-    //     price: (getAllCategory.map(s => { return s.price }).reduce((a, b) => a + b, 0)).toFixed(2),
-    //   }
-
-    //   getAllCategory.push(newCategory)
-    //   return res.status(200).json({ categoryList: getAllCategory, categoryType: categoryData, locationType: locationData });
-    // }
-    // else {
-    //   return res.status(200).json({ categoryList: [] });
-    // }
-
-
   } catch (err) {
     console.error(err);
     return res.status(400).json({ error: 'Internal Error' });
@@ -950,7 +848,6 @@ router.post('/category/getAll', async (req, res) => {
 router.post('/sales/getAll', async (req, res) => {
   const { startDate, endDate, type, location, name } = req.body;
   let searchType = ''
-  // console.log(req.body)
   const startDateQuery = startDate ? sqlDate(startDate) : sqlDate('2000-1-1');
   const endDateQuery = endDate ? sqlDate(endDate) : sqlDate();
   if (type === 'Daily' || !type) { searchType = 'day' }
@@ -981,8 +878,6 @@ router.post('/sales/getAll', async (req, res) => {
 
   }
 
-  // ???
-  // WHERE("order".payment = true AND "order".cancel = false)
   try {
     const [result] = await sequelize.query(`
   SELECT  CAST(DATE_TRUNC('${searchType}', "order"."createdAt") AS DATE) AS date,
@@ -1008,8 +903,8 @@ router.post('/sales/getAll', async (req, res) => {
       qty: result.map(s => { return parseInt(s.qty) }).reduce((a, b) => a + b, 0),
       orders: result.map(s => { return parseInt(s.orders) }).reduce((a, b) => a + b, 0),
       subtotal: result.map(s => { return s.subtotal }).reduce((a, b) => a + b, 0),
-      discount_total: result.map(s=> {return s.discount_total}).reduce((a, b) => a + b, 0),
-      discount_code_amount: result.map(s=> {return s.discount_code_amount}).reduce((a, b) => a + b, 0),
+      discount_total: result.map(s => { return s.discount_total }).reduce((a, b) => a + b, 0),
+      discount_code_amount: result.map(s => { return s.discount_code_amount }).reduce((a, b) => a + b, 0),
       net: result.map(s => { return s.net }).reduce((a, b) => a + b, 0),
       tax: result.map(s => { return s.tax }).reduce((a, b) => a + b, 0),
 
@@ -1061,7 +956,6 @@ router.post('/resetpassword', (req, res) => {
 // POST @-> /api/admin/refund/getAll
 // To get all REFUND details
 router.post('/refund/getAll', async (req, res) => {
-  // console.log(req.body)
   const { startDate, endDate, location } = req.body;
   let stDate = ''
   let edDate = ''
@@ -1105,7 +999,6 @@ router.post('/refund/getAll', async (req, res) => {
 
   try {
     const getAllRefund = await Refund.findAll(query);
-    // console.log(getAllRefund[0].charge.order)
     if (getAllRefund.length) {
       const newItem = {
         date: 'Total',
@@ -1124,168 +1017,6 @@ router.post('/refund/getAll', async (req, res) => {
     return res.status(400).json({ error: 'Internal Error' });
   }
 });
-
-
-// GET ALL CODE DETAILS
-// POST @-> /api/admin/code/getAll
-// To get all CODE details
-// router.post('/code/getAll', async (req, res) => {
-
-//   try {
-//     const getAllCode = await Code.findAll({
-//       include: {
-//         model: ServiceType
-//       }
-//     });
-//     if (!getAllCode.length) {
-//       console.log("No code(s)");
-//       return res.status(400).json({ error: 'No discount code found' });
-//     };
-//     return res.status(200).json({ codeList: getAllCode });
-//   }
-//   catch (err) {
-//     console.error(err);
-//     return res.status(400).json({ error: 'Error when finding discount code' });
-//   };
-// });
-
-
-// CREATE CODE DETAILS
-// POST @-> /api/admin/code/create
-// To create CODE details
-// router.post('/code/create', async (req, res) => {
-//   const { code, start_date, end_date, amount, type, redeem_per_user, redeem_per_day, location, service } = req.body.data;
-//   try {
-//     const checkCodeName = await Code.findOne({
-//       where: {
-//         code: code
-//       }
-//     });
-
-//     if (checkCodeName) {
-//       return res.status(400).json({ error: 'Code name existed, please try other name' });
-//     }
-
-//     let locationUse = false;
-//     let serviceUse = false;
-
-//     if (location !== "") {
-//       locationUse = true;
-//     }
-
-//     if (service !== null) {
-//       serviceUse = true;
-//     }
-
-//     const createCode = Code.build({
-//       code: code,
-//       start_date: start_date,
-//       end_date: end_date,
-//       amount: amount,
-//       type: type,
-//       redeem_per_user: redeem_per_user,
-//       redeem_per_day: redeem_per_day,
-//       locationUse: locationUse,
-//       serviceUse: serviceUse,
-//       location: location,
-//       serviceTypeId: service
-//     });
-
-//     await createCode.save();
-//     return res.status(200).json({ message: 'Successfully created' });
-//   }
-//   catch (err) {
-//     console.error(err);
-//     return res.status(400).json({ error: 'Error when finding discount code' });
-//   }
-// });
-
-
-// EDIT CODE DETAILS
-// POST @-> /api/admin/code/edit
-// To edit CODE details
-// router.post('/code/edit', async (req, res) => {
-//   const { id, code, start_date, end_date, amount, type, redeem_per_user, redeem_per_day, location, service } = req.body.data;
-
-//   try {
-//     // const checkCodeName = await Code.findOne({
-//     //   where: {
-//     //     code: code
-//     //   }
-//     // });
-
-//     // if (checkCodeName) {
-//     //   return res.status(400).json({ error: 'Code name existed, please try other name' });
-//     // }
-
-//     let editCode = await Code.findOne({
-//       where: {
-//         id: id
-//       }
-//     });
-
-//     if (!editCode) {
-//       return res.status(400).json({ error: 'Error when finding the code id' });
-//     }
-
-//     let locationUse = false;
-//     let serviceUse = false;
-
-//     if (location !== "") {
-//       locationUse = true;
-//     }
-
-//     if (service !== null) {
-//       serviceUse = true;
-//     }
-
-//     editCode.code = code;
-//     editCode.start_date = start_date;
-//     editCode.end_date = end_date;
-//     editCode.amount = amount;
-//     editCode.type = type;
-//     editCode.redeem_per_day = redeem_per_day;
-//     editCode.redeem_per_user = redeem_per_user;
-//     editCode.locationUse = locationUse;
-//     editCode.serviceUse = serviceUse;
-//     editCode.location = location;
-//     editCode.serviceTypeId = service;
-
-//     await editCode.save();
-//     return res.status(200).json({ message: 'Successfully edited' });
-//   }
-//   catch (err) {
-//     console.error(err);
-//     return res.status(400).json({ error: 'Internal error' });
-//   }
-// });
-
-
-// EDIT CODE DETAILS
-// POST @-> /api/admin/code/edit
-// To edit CODE details
-// router.post('/code/delete', async (req, res) => {
-//   const { id } = req.body
-//   try {
-
-//     const deleteCode = await Code.destroy({
-//       where: {
-//         id: id
-//       }
-//     });
-
-//     if (!deleteCode) {
-//       return res.status(400).json({ error: 'Error when finding the code id' });
-//     }
-
-//     return res.status(200).json({ message: 'Successfully deleted' });
-//   }
-//   catch (err) {
-//     console.error(err);
-//     return res.status(400).json({ error: 'Internal error' });
-//   }
-// });
-
 
 // GET ALL CODE DETAILS
 // POST @-> /api/admin/code/getAll
@@ -1368,7 +1099,7 @@ router.post('/code/edit', async (req, res) => {
   const { id, code, start_date, end_date, amount, type, redeem_per_user, redeem_per_day, redeem_per_month, location, service } = req.body.data;
 
   try {
-    
+
     let editCode = await RedeemCode.findOne({
       where: {
         id: id
@@ -1379,7 +1110,7 @@ router.post('/code/edit', async (req, res) => {
       return res.status(400).json({ error: 'Error when finding the code id' });
     }
 
-    if(editCode.code !== code){
+    if (editCode.code !== code) {
       // If changing the old name into the new name
       let checkCodeName = await RedeemCode.findOne({
         where: {
@@ -1387,7 +1118,7 @@ router.post('/code/edit', async (req, res) => {
         }
       });
 
-      if(checkCodeName){
+      if (checkCodeName) {
         return res.status(400).json({ error: 'Code name existed, please try other name' });
       };
     };

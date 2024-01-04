@@ -5,12 +5,9 @@ const AWS = require('aws-sdk');
 const jwt = require('jsonwebtoken');
 
 const {
-  genNewCustomerNum,
-  deductGenNum,
+  genNewCustomerNum
 } = require('../../configs/function/misc');
 const { uploadtos3 } = require('../../configs/function/aws');
-
-const Admin = require('../../configs/tables/Admin');
 const Customer = require('../../configs/tables/Customer');
 const Otp = require('../../configs/tables/Otp');
 const Order = require('../../configs/tables/Order');
@@ -25,8 +22,6 @@ const {
 } = require('../../configs/function/dynamicController');
 const { generateOtp, sendSMS } = require('../../configs/function/sms');
 const { checkNumber } = require('../../configs/function/validate');
-const { syncLockerSlot } = require('../../configs/function/misc');
-const SlackError = require('../../configs/function/slackBot');
 
 const router = Router();
 const moment = require('moment');
@@ -47,42 +42,25 @@ const s3 = new AWS.S3();
 router.post('/signup', async (req, res) => {
   const { full_name, phone_number, email, password, country } = req.body;
   console.log('register', req.body);
-  // const operatorId = req.body.operatorCode;
   const salt = bcrypt.genSaltSync(13);
   const hash = bcrypt.hashSync(password, salt);
 
-  // Admin.findOne({ operatorId }).then((foundAdmin) => {
-  //   if (!foundAdmin) {
-  //     // if this operatorID is not found
-  //     console.error(`This operator ID was not found: ${operatorId}`);
-  //     return res
-  //       .status(400)
-  //       .json({ error: 'Unable to register without a QRCode' });
-  //   } else if (foundAdmin.disabled == true) {
-  //     return res
-  //       .status(400)
-  //       .json({ error: 'User is unauthorized to register' });
-  //   }
-  //   // registration process
 
   // check if this number or email exist in database
   const foundExist = await Customer.findOne({
     where: {
-      // verified: true,
       phone_number: country + phone_number,
     },
   });
 
   const foundExistEmail = await Customer.findOne({
     where: {
-      // verified: true,
       email: email,
     },
   });
 
   try {
     if (foundExist) {
-      // console.log(foundExist.email)
       if (foundExist.verified) {
         console.error('existing email or phone');
         return res
@@ -94,7 +72,7 @@ router.post('/signup', async (req, res) => {
         foundExist.email = email;
         foundExist.password = hash;
 
-        foundExist.save().then((existUser) => {
+        foundExist.save().then(() => {
           Otp.findOne({ where: { phone_number: country + phone_number } })
             .then((foundOtp) => {
               if (!foundOtp) {
@@ -131,7 +109,6 @@ router.post('/signup', async (req, res) => {
                   foundOtp
                     .save()
                     .then((savedOtp) => {
-                      // console.log('savedOTP', savedOtp);
                       sendSMS(savedOtp.phone_number, message, type, () =>
                         res.status(200).json({
                           status: 200,
@@ -495,7 +472,7 @@ router.post('/resetpassword', (req, res) => {
 
           foundCustomer
             .save()
-            .then((savedUser) => {
+            .then(() => {
               return res.status(200).json({ password: 'success' });
             })
             .catch((err) => {
@@ -513,8 +490,6 @@ router.post('/resetpassword', (req, res) => {
 });
 
 router.post('/sendMonthly', async (req, res) => {
-  // const { orderId, message, phone_number } =
-  //   req.body;
   const date = new Date();
 
   const month = [
@@ -551,7 +526,7 @@ router.post('/sendMonthly', async (req, res) => {
         },
       },
     });
-    // console.log('order', date.getMonth())
+
     let hqOrder = orders.filter((o) => o.location === 'HQ');
     let hqAmount = hqOrder
       .map((h) => h.price)
@@ -630,7 +605,6 @@ router.post('/sendMonthly', async (req, res) => {
         'support',
         `[test] ${month[date.getMonth()]}'s Sales Report`
       );
-      // console.log(month[todayMonth])
       return res.status(200).json({
         message: 'Created Successfully',
       });

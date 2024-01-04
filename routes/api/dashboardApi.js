@@ -41,29 +41,6 @@ router.post('/getPastOrder', async (req, res) => {
         }
       ]
     })
-
-    // console.log(data[0].order_details)
-
-    // const newData = data.map((data) => ({
-    //   createdAt: data.createdAt,
-    //   oid: data.oid,
-    //   serviceType: data.serviceType,
-    //   price: data.price,
-    //   createdTime: data.createdTime,
-    //   lockerId: data.lockerId,
-    //   quantity: data.quantity,
-    //   collectLockerId: data.collectLockerId,
-    //   location: data.location,
-    //   note: data.note,
-    //   pick_up_date: data.pick_up_date,
-    //   process_done_time: data.process_done_time,
-    //   delivered_time: data.delivered_time,
-    //   pick_up_time: data.pick_up_time,
-    //   orderDetail: data.order_details,
-    //   status: data.status,
-    // }));
-
-    // console.log(data[0]);
     const newData = data.map((data) => {
       let orderDetail = data.order_details;
       let orderDetailTrueAmount = orderDetail.reduce((sum, item) => {
@@ -95,7 +72,6 @@ router.post('/getPastOrder', async (req, res) => {
         createdAt: data.createdAt,
         oid: data.oid,
         serviceType: data.serviceType,
-        // orderPrice: data.price,
         price: data.price,
         createdTime: data.createdTime,
         lockerId: data.lockerId,
@@ -158,7 +134,6 @@ router.post('/getCurrentOrder', (req, res) => {
 
           let discountAmount = 0;
           if (order.redeemCode) {
-            // console.log(order.code)
             if (order.redeemCode.type === 'Flat') {
               discountAmount = order.redeemCode.amount;
             }
@@ -187,7 +162,6 @@ router.post('/getCurrentOrder', (req, res) => {
         return returnData
       })()
         .then((savedData) => {
-          // console.log("saved", savedData)
           return res.status(200).json({ currentOrder: savedData });
         })
     })
@@ -241,6 +215,7 @@ router.post('/getCollectOrder', (req, res) => {
       return res.status(400).json({ error: 'Internal Error' });
     });
 });
+
 // GET PAYMENT ORDER DETAILS
 // POST @-> /api/dashboard/getpaymentorder
 // To get all payment order details
@@ -276,29 +251,23 @@ router.post('/getPaymentOrder', async (req, res) => {
         .map(a => { return a.amount }).reduce((a, b) => a + b, 0)
 
 
-      // Add here
       let totalAmountCancelled = 0;
       totalAmountCancelled = order.order_details
         .filter(item => item.cancel === true)
         .map(item => item.price * item.qty)
         .reduce((a, b) => a + b, 0);
 
-      // console.log(order.oid, totalAmountCancelled* 100, totalPaid, ((order.price + order.price * 0.06) * 100).toFixed(2))
-      let discountAmount = 0;
+       let discountAmount = 0;
       if (order.redeemCode) {
-        // console.log(order.redeemCode);
-        if (order.redeemCode.type === 'Flat') {
+           if (order.redeemCode.type === 'Flat') {
           discountAmount = order.redeemCode.amount;
-          // discountAmount = discountAmount + (discountAmount * 0.06);
-        }
+           }
         else {
           discountAmount = (order.price * (order.redeemCode.amount / 100));
-          // discountAmount = discountAmount + (discountAmount * 0.06);
-        }
+           }
       }
 
-      // console.log(((order.price + order.price * 0.06) * 100).toFixed(2) - totalPaid - (discountAmount * 100).toFixed(2) - ((totalAmountCancelled + totalAmountCancelled * 0.06) * 100).toFixed(2));
-      paymentOrder.push({
+       paymentOrder.push({
         orderId: order.oid,
         serviceType: order.serviceType,
         price: (((order.price - discountAmount) + (order.price - discountAmount) * 0.06) * 100).toFixed(2) - totalPaid - ((totalAmountCancelled + totalAmountCancelled * 0.06) * 100).toFixed(2),
@@ -319,7 +288,6 @@ router.post('/getPaymentOrder', async (req, res) => {
         status: order.status,
       })
     }
-    // console.log(paymentOrder);
     return res.status(200).json({ paymentOrder });
   }
   catch (err) {
@@ -373,6 +341,7 @@ router.post('/getDepositOrder', (req, res) => {
       return res.status(400).json({ error: 'Internal Error' });
     });
 });
+
 // GET ALL INBOX DETAILS
 // POST @-> /api/dashboard/getAllInbox
 // To get all inbox details
@@ -414,7 +383,7 @@ router.post('/updateInbox', (req, res) => {
         });
       }
     })
-    .catch((error) => {
+    .catch(() => {
       res.status(400).json({ error: 'Server Error' });
     });
 });

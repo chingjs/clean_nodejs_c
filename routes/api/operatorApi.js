@@ -141,8 +141,6 @@ router.post('/details/edit', async (req, res) => {
       });
     } else {
       foundOperator.full_name = full_name;
-      // foundOperator.password = hash;
-
       foundOperator.email = email;
       foundOperator.updatedBy = foundAdmin.id;
       await foundOperator.save()
@@ -215,34 +213,9 @@ router.post('/view', (req, res) => {
     });
 });
 
-// GET ALL OPERATOR
-// POST @-> /api/operator/viewAll
-// To view all operator details
-router.post('/getAll', async (req, res) => {
-  const { status } = req.body;
-  try {
-    const allAdmin = await Admin.findAll({})
-    const checkDriver = await Operator.findAll({ where: { status: 'Active' } })
-    let data = []
-    for (let a = 0; a < checkDriver.length; a++) {
-      let driver = checkDriver[a].dataValues
-      data.push({
-        ...driver,
-        // createdBy: driver.adminId ? allAdmin.filter(ad => ad.id === driver.adminId)[0].username : '',
-        // updatedBy: driver.updatedBy ? allAdmin.filter(ap => ap.id === driver.updatedBy)[0].username : ''
-      })
-    }
-    // console.log(data)
-    return res.status(200).json({ data });
-  } catch (err) {
-    return res.status(400).json({ error: 'Internal Error' });
-  }
-});
-
 // LOGIN
 // POST @-> /api/operator/login
 // Operator login
-
 router.post('/login', (req, res) => {
   const { phone_number, password } = req.body;
 
@@ -308,7 +281,7 @@ router.post('/createTask', (req, res) => {
 
   newTask
     .save()
-    .then((savedRecord) => {
+    .then(() => {
       return res.status(200).json('success created task');
     })
     .catch((err) => {

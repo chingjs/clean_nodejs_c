@@ -67,7 +67,6 @@ router.post("/create", (req, res) => {
                   return res.status(400).json({ error: 'Internal Error' });
                 }
                 savedFabric.photo_url = url;
-                // console.log("uploaded item type img", savedFabric.photo_url)
                 return res
                   .status(200)
                   .json({
@@ -140,7 +139,6 @@ router.post("/getAll", (req, res) => {
             returnData.push(obj);
           }
         }
-        // console.log('returnData', returnData)
         return returnData
       })().then((newData) => {
         const returnThis = {
@@ -211,7 +209,6 @@ router.post("/getFabricPrice", async (req, res) => {
 router.post('/update', (req, res) => {
   const { id, name, newprice, newstatus, photoUrl, filetype, serviceTypeId, strategy } = req.body;
   if (!id || !name || !serviceTypeId || !strategy) { return res.status(400).json({ error: 'Missing details' }) }
-  // console.log(req.body);
   Fabric.findByPk(id)
     .then((foundService) => {
       if (!foundService)
@@ -234,7 +231,6 @@ router.post('/update', (req, res) => {
           foundService
             .save()
             .then((savedService) => {
-              // console.log(savedService);
               return res.status(200).json(savedService);
             })
             .catch((err) => {
@@ -251,7 +247,6 @@ router.post('/update', (req, res) => {
         foundService
           .save()
           .then((savedService) => {
-            // console.log(savedService);
             return res.status(200).json(savedService);
           })
           .catch((err) => {
@@ -302,7 +297,7 @@ router.post('/duplicateList', async (req, res) => {
       await createItem.save()
 
     }
-    return res.status(200).json({message:"Created Successfully"});
+    return res.status(200).json({ message: "Created Successfully" });
   }
   catch (err) {
     console.error('Error when updating fabric: \n', err);

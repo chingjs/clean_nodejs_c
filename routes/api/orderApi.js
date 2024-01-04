@@ -2,7 +2,6 @@
 const { Router } = require('express');
 const fs = require('fs');
 const path = require('path');
-const Code = require('../../configs/tables/Code');
 const Order = require('../../configs/tables/Order');
 const Inbox = require('../../configs/tables/Inbox');
 const Refund = require('../../configs/tables/Refund');
@@ -87,10 +86,7 @@ router.post('/create', (req, res) => {
     codeData,
   } = req.body;
 
-  // console.log("req", req.body)
-  // console.log(totalOrder, totalWithTax);
   const tempKey = [];
-  //uploading img to s3
   if (files.length) {
     files.forEach((file, idx) => {
       const regex = /^data:image\/\w+;base64,/;
@@ -99,9 +95,7 @@ router.post('/create', (req, res) => {
       const filetype = file.fileType;
       const Key = `/order/photo/${phone_number}/${tempId}`;
       tempKey.push(Key);
-
       uploadtos3(Key, body, 'base64', filetype, (status) => {
-        // console.log(status);
         if (status === 'failed') {
           console.log('Failed');
           console.error('S3 image upload failed.');
@@ -113,7 +107,6 @@ router.post('/create', (req, res) => {
 
   genNewOrderNum('ORDER', (err, oid) => {
     if (err) return res.status(400).json({ error: 'Internal Error' });
-
     const newOrder = Order.build({
       oid,
       pick_up_date,
@@ -151,118 +144,109 @@ router.post('/create', (req, res) => {
         })()
           .then(() => {
             if (savedOrder.redeemCodeId) {
-              const checkCode = RedeemCode.findOne({
-                where: {
-                  id: savedOrder.redeemCodeId,
-                },
-              })
-                .then((foundCode) => {
-                  const title = 'test';
-                  const detail = 'CLEANING_SERVICES';
-                  const additionalData = savedOrder.oid;
+              const title = 'test';
+              const detail = 'CLEANING_SERVICES';
+              const additionalData = savedOrder.oid;
 
-                  let discountAmount = 0;
-                  let payAmount = 0;
-                  if (foundCode.type === 'Flat') {
-                    discountAmount = totalOrder - foundCode.amount;
-                    payAmount = discountAmount + discountAmount * 0.06;
-                    payAmount = parseInt(payAmount * 100);
-                  } else {
-                    discountAmount =
-                      totalOrder - totalOrder * (foundCode.amount / 100);
-                    payAmount = discountAmount + discountAmount * 0.06;
-                    payAmount = parseInt(payAmount * 100);
-                  }
+              let discountAmount = 0;
+              let payAmount = 0;
+              if (foundCode.type === 'Flat') {
+                discountAmount = totalOrder - foundCode.amount;
+                payAmount = discountAmount + discountAmount * 0.06;
+                payAmount = parseInt(payAmount * 100);
+              } else {
+                discountAmount =
+                  totalOrder - totalOrder * (foundCode.amount / 100);
+                payAmount = discountAmount + discountAmount * 0.06;
+                payAmount = parseInt(payAmount * 100);
+              }
 
-                  if (discountAmount <= 0) {
-                    discountAmount = totalOrder;
-                  }
+              if (discountAmount <= 0) {
+                discountAmount = totalOrder;
+              }
 
-                  if (payAmount <= 0) {
-                    payAmount = 0;
+              if (payAmount <= 0) {
+                payAmount = 0;
+              }
+              if (payAmount != 0) {
+                getPaymentUrl(
+                  {
+                    outletId: 'test',
+                    rmClientId,
+                    rmClientSecret,
+                    rmStoreId,
+                    serverPrivateKey,
+                  },
+                  { title, detail, additionalData, payAmount },
+                  (err, data) => {
+                    if (err)
+                      return res.status(400).json({ error: err.message });
+                    return res
+                      .status(200)
+                      .json({ url: data.url, succesOrder: data.order });
                   }
-                  if (payAmount != 0) {
-                    getPaymentUrl(
-                      {
-                        outletId: 'SmartLocker',
-                        rmClientId,
-                        rmClientSecret,
-                        rmStoreId,
-                        serverPrivateKey,
-                      },
-                      { title, detail, additionalData, payAmount },
-                      (err, data) => {
-                        if (err)
-                          return res.status(400).json({ error: err.message });
-                        return res
-                          .status(200)
-                          .json({ url: data.url, succesOrder: data.order });
-                      }
-                    );
-                  } else {
-                    const newPayment = Payment.build({
+                );
+              } else {
+                Payment.build({
+                  orderId: savedOrder.id,
+                  oid: savedOrder.oid,
+                  amount: payAmount,
+                  method: 'CODE',
+                })
+                  .save()
+                  .then(() => {
+                    Discount.build({
+                      discountCode: foundCode.code,
+                      discountAmount: foundCode.amount,
+                      discountType: foundCode.type,
+                      redeemCodeId: foundCode.id,
+                      customerId: savedOrder.customerId,
                       orderId: savedOrder.id,
-                      oid: savedOrder.oid,
-                      amount: payAmount,
-                      method: 'CODE',
+                      totalDeductAmount: discountAmount,
                     })
                       .save()
-                      .then((savedPayment) => {
-                        const newDiscount = Discount.build({
-                          discountCode: foundCode.code,
-                          discountAmount: foundCode.amount,
-                          discountType: foundCode.type,
-                          redeemCodeId: foundCode.id,
-                          customerId: savedOrder.customerId,
-                          orderId: savedOrder.id,
-                          totalDeductAmount: discountAmount,
-                        })
-                          .save()
-                          .then((saveDiscount) => {
-                            if (saveDiscount) {
-                              savedOrder.payment = true;
-                              savedOrder
-                                .save()
-                                .then((updateOrder) => {
-                                  if (updateOrder) {
-                                    return res
-                                      .status(200)
-                                      .json({ code: 'Paid by code' });
-                                  }
-                                })
-                                .catch((err) => {
-                                  console.error(
-                                    'Failed to update the order payment',
-                                    err
-                                  );
-                                  return res.status(400).json({
-                                    error: 'Failed to update the order payment',
-                                  });
-                                });
-                            }
-                          })
-                          .catch((err) => {
-                            console.error(
-                              'Failed to saved the order discount',
-                              err
-                            );
-                            return res.status(400).json({
-                              error: 'Failed to saved the order discount',
+                      .then((saveDiscount) => {
+                        if (saveDiscount) {
+                          savedOrder.payment = true;
+                          savedOrder
+                            .save()
+                            .then((updateOrder) => {
+                              if (updateOrder) {
+                                return res
+                                  .status(200)
+                                  .json({ code: 'Paid by code' });
+                              }
+                            })
+                            .catch((err) => {
+                              console.error(
+                                'Failed to update the order payment',
+                                err
+                              );
+                              return res.status(400).json({
+                                error: 'Failed to update the order payment',
+                              });
                             });
-                          });
+                        }
                       })
                       .catch((err) => {
-                        console.error('Failed to saved the payment', err);
-                        return res
-                          .status(400)
-                          .json({ error: 'Failed to saved the payment' });
+                        console.error(
+                          'Failed to saved the order discount',
+                          err
+                        );
+                        return res.status(400).json({
+                          error: 'Failed to saved the order discount',
+                        });
                       });
-                  }
-                })
-                .catch((err) => {
-                  console.error('Error when finding code id', err);
-                  return res.status(400).json({ error: 'Internal Error' });
-                });
+                  })
+                  .catch((err) => {
+                    console.error('Failed to saved the payment', err);
+                    return res
+                      .status(400)
+                      .json({ error: 'Failed to saved the payment' });
+                  });
+              }
+
+
             } else {
               const title = 'test';
               const detail = 'CLEANING_SERVICES';
@@ -353,10 +337,8 @@ router.post('/getAll', async (req, res) => {
     query.where.location = location;
   }
 
-  // console.log(query);
   Order.findAll(query)
     .then((data) => {
-      // console.log(data);
       if (data.length) {
         Operator.findAll().then((foundOperator) => {
           (async () => {
@@ -387,16 +369,12 @@ router.post('/getAll', async (req, res) => {
                     refundTotal += parseFloat(refund.refundAmount);
                   }
                 }
-                // console.log(order.oid, refundTotal)
               }
-
-              // console.log(getDetails[0]);
 
               let totalCancelQty = 0;
               let totalCancelAmount = 0;
               if (getDetails.length) {
                 totalCancelQty = getDetails.reduce((total, detail) => {
-                  // console.log(detail.dataValues.cancel)
                   if (detail.dataValues.cancel === true) {
                     return total + detail.dataValues.qty;
                   }
@@ -404,7 +382,6 @@ router.post('/getAll', async (req, res) => {
                 }, 0);
 
                 totalCancelAmount = getDetails.reduce((total, detail) => {
-                  // console.log(detail.dataValues.cancel)
                   if (detail.dataValues.cancel === true) {
                     return (
                       total + detail.dataValues.price * detail.dataValues.qty
@@ -412,12 +389,10 @@ router.post('/getAll', async (req, res) => {
                   }
                   return total;
                 }, 0);
-                // console.log(totalCancelQty)
               }
 
               let codeAmount = 0;
               if (order.redeemCode) {
-                // console.log(order.redeemCode)
                 if (order.redeemCode.type === 'Flat') {
                   codeAmount = order.redeemCode.amount;
                 } else {
@@ -429,7 +404,6 @@ router.post('/getAll', async (req, res) => {
                   codeAmount = (orderAmount * order.redeemCode.amount) / 100;
                 }
               }
-              // console.log("Discount amount", codeAmount)
               const getPrice = getDetails
                 .map((a) => {
                   return a.price * a.qty;
@@ -444,11 +418,9 @@ router.post('/getAll', async (req, res) => {
                 deliveryRecord: foundOperator.filter(
                   (operator) => operator.oid === order.delivery_driver
                 )[0]?.full_name,
-                // totalCharges: charges.map((ch) => ch.amount).reduce((a, b) => a + b, 0),
                 images: [],
                 refund: refundTotal,
                 codeAmount: codeAmount,
-                // subtotal: parseFloat(getPrice - refundTotal),
                 itemQuantity: 0,
                 subtotal: parseFloat(getPrice),
                 price: parseFloat(getPrice + getPrice * 0.06),
@@ -468,7 +440,6 @@ router.post('/getAll', async (req, res) => {
                   );
                   obj.images.push(url);
                 }
-                // console.log("obj", obj)
                 returnData.push(obj);
               } else {
                 returnData.push(obj);
@@ -476,7 +447,6 @@ router.post('/getAll', async (req, res) => {
             }
             return returnData;
           })().then((jsonData) => {
-            //console.log(jsonData)
             return res.status(200).json(jsonData);
           });
         });
@@ -510,7 +480,7 @@ router.post('/details/updateDeposit', (req, res) => {
             phone_number: savedDeposit.phone_number,
             title: `Laundry Notification - You have an active order #${savedDeposit.oid}!`,
             message:
-              'Your order is on the list now. We will update you again when the order has pick up for cleaning. Thank you) ',
+              'Your order is on the list now. We will update you again when the order has pick up for cleaning. Thank you ',
           });
           newInbox.save();
           return res.status(200).json('updated deposit time');
@@ -542,7 +512,6 @@ router.post('/details/updatePickUpOrder', (req, res) => {
           return res.status(400).json({ error: 'Order not found' });
         } else {
           if (!foundOrder.pick_up_driver) {
-            // console.log('null driver', foundOrder.pick_up_driver);
             foundOrder.pick_up_driver = operatorId;
 
             foundOrder.save().then((savedOrder) => {
@@ -557,7 +526,6 @@ router.post('/details/updatePickUpOrder', (req, res) => {
                 status:
                   savedOrder.pick_up_time === null ? 'Pick Up' : 'Drop Off',
               });
-              // console.log('check newTask', newTask);
               newTask
                 .save()
                 .then((savedTask) => {
@@ -573,13 +541,11 @@ router.post('/details/updatePickUpOrder', (req, res) => {
                 });
             });
           } else {
-            // console.log('have driver', foundOrder.pick_up_driver);
             foundOrder.pick_up_driver = operatorId;
             foundOrder.save().then((updatedOrder) => {
               Record.findOne({
                 where: { orderId: updatedOrder.oid, completed: false },
               }).then((foundRecord) => {
-                // console.log('checkpickup', updatedOrder.pick_up_driver);
                 foundRecord.operatorId = updatedOrder.pick_up_driver;
                 foundRecord
                   .save()
@@ -609,8 +575,6 @@ router.post('/details/updatePickUpOrder', (req, res) => {
 // To edit delivery order details
 router.post('/details/updateDeliveryOrder', (req, res) => {
   const { orderId, operatorId, collectLockerId } = req.body;
-  // console.log('req', req.body);
-
   Order.findOne({ where: { oid: orderId } })
     .then((foundRecord) => {
       genNewTaskNum('TASK', (err, tid) => {
@@ -667,7 +631,6 @@ router.post('/details/updateDeliveryOrder', (req, res) => {
                   Record.findOne({
                     where: { orderId: updatedOrder.oid, completed: false },
                   }).then((foundTask) => {
-                    // console.log('checkUpdateOrder', updatedOrder.delivery_driver);
                     foundTask.operatorId = operatorId;
                     foundTask.lockerId = foundRecord.collectLockerId;
                     foundTask
@@ -767,7 +730,7 @@ router.post('/details/updateDelivery', (req, res) => {
           foundOrder.delivered_to_locker = true;
           foundOrder
             .save()
-            .then((savedPickUp) => {
+            .then(() => {
               const newInbox = Inbox.build({
                 phone_number: foundOrder.dataValues.phone_number,
                 title: `Laundry Notification - Your Order #${oid} is ready to collect!`,
@@ -803,7 +766,6 @@ router.post('/details/updateDelivery', (req, res) => {
 // To edit order details
 router.post('/details/updatePayment', (req, res) => {
   const { data } = req.body;
-  // console.log(data);
   const id = data.order.additionalData;
   const transactionId = data.transactionId;
   Order.findOne({ where: { oid: id } })
@@ -825,17 +787,12 @@ router.post('/details/updatePayment', (req, res) => {
             }
 
             let discountAmount = 0;
-            // let payAmount = 0;
-            if (foundCode.type === 'Flat') {
+               if (foundCode.type === 'Flat') {
               discountAmount = foundRecord.amount - foundCode.amount;
-              // payAmount = discountAmount + discountAmount * 0.06;
-              // payAmount = parseInt(payAmount * 100);
             } else {
               discountAmount =
                 foundRecord.amount -
                 foundRecord.amount * (foundCode.amount / 100);
-              // payAmount = discountAmount + discountAmount * 0.06;
-              // payAmount = parseInt(payAmount * 100);
             }
 
             if (discountAmount <= 0) {
@@ -862,7 +819,7 @@ router.post('/details/updatePayment', (req, res) => {
 
             foundRecord
               .save()
-              .then((savedRecord) => {
+              .then(() => {
                 newPayment
                   .save()
                   .then((savePayment) => {
@@ -915,7 +872,7 @@ router.post('/details/updatePayment', (req, res) => {
 
         foundRecord
           .save()
-          .then((savedRecord) => {
+          .then(() => {
             newPayment.save().then((savePayment) => {
               if (savePayment) {
                 return res.status(200).json('success update payment true');
@@ -943,7 +900,7 @@ router.post('/makePayment', (req, res) => {
   const { price, orderId, additionalData } = req.body;
   const title = 'test';
   const detail = 'CLEANING_SERVICES';
-  // console.log(req.body)
+
   Order.findOne({ where: { oid: orderId } }).then((data) => {
     const payAmount = parseFloat(price.toFixed(0));
     console.log('repay = ', payAmount);
@@ -1032,20 +989,6 @@ router.post('/updateComplete', (req, res) => {
 // To GET ORDER DETAIL TO TABLe
 router.post('/getOrderDetails', async (req, res) => {
   const { oid } = req.body;
-  // OrderDetails.findAll({ where: { orderNo: oid } })
-  //   .then((foundOrder) => {
-  //     if (!foundOrder) {
-  //       return res.status(400).json({ error: 'Order not found' });
-  //     }
-  //     else {
-  //       return res.status(200).json(foundOrder);
-  //     }
-  //   }).catch((err) => {
-  //     console.error('Error when finding this order');
-  //     console.error(err);
-  //     return res.status(400).json({ error: 'Internal Error' });
-  //   });
-
   try {
     const foundOrder = await OrderDetails.findAll({
       where: {
@@ -1076,7 +1019,6 @@ router.post('/getOrderDetails', async (req, res) => {
     let totalCancelAmount = 0;
     if (foundOrder.length) {
       totalCancelQty = foundOrder.reduce((total, detail) => {
-        // console.log(detail.dataValues.cancel)
         if (detail.dataValues.cancel === true) {
           return total + detail.dataValues.qty;
         }
@@ -1084,7 +1026,6 @@ router.post('/getOrderDetails', async (req, res) => {
       }, 0);
 
       totalCancelAmount = foundOrder.reduce((total, detail) => {
-        // console.log(detail.dataValues.cancel)
         if (detail.dataValues.cancel === true) {
           return total + detail.dataValues.price * detail.dataValues.qty;
         }
@@ -1092,8 +1033,6 @@ router.post('/getOrderDetails', async (req, res) => {
       }, 0);
       //
     }
-
-    // console.log(totalCancelQty, totalCancelAmount)
 
     if (!foundOrder) {
       return res.status(400).json({ error: 'Order not found' });
@@ -1136,7 +1075,7 @@ router.post('/getList', async (req, res) => {
 
 router.post('/getChargesOrderList', async (req, res) => {
   const { location, name } = req.body;
-  // console.log(req.body);
+
   let query = { where: { status: 'active', cancel: false, location: {} } };
   if (location && location.length) {
     query.where.location = { [Op.in]: location };
@@ -1154,7 +1093,6 @@ router.post('/getChargesOrderList', async (req, res) => {
     const allFabric = await Fabric.findAll({});
     const foundOrder = await Order.findAll(query);
 
-    // console.log(foundOrder.length);
     return res.status(200).json({
       order: foundOrder,
       item: allItem,
@@ -1432,13 +1370,7 @@ router.post('/charges', async (req, res) => {
       // Issues on this, get item fabric ID instead of getting unique UUID if got multiple item with same category/fabric.
       console.log('Remove Item: ', removeItem);
       const fabricId = removeItem;
-      // const checkRemoveItem = await OrderDetails.findOne({
-      //   where: {
-      //     orderNo: foundOrder.oid,
-      //     id: removeItem
-      //   }
-      // });
-
+   
       const orderPayment = await OrderDetails.findAll({
         where: {
           orderNo: foundOrder.oid,
@@ -1493,9 +1425,6 @@ router.post('/charges', async (req, res) => {
           paymentAmount = parseFloat(paymentAmount).toFixed(2);
           orderAmount = parseFloat(orderAmount).toFixed(2);
 
-          // console.log('1 ----------');
-          // console.log(paymentAmount, orderAmount);
-          // If paid and remove item scenario
           if (paymentAmount < orderAmount) {
             foundOrder.payment = false;
             await foundOrder.save();
@@ -1540,7 +1469,6 @@ router.post('/charges', async (req, res) => {
 // To GET CHARGES DETAIL TO TABLE
 router.post('/getCharges', async (req, res) => {
   const { location, name } = req.body;
-  // console.log(req.body)
   let data = [];
   let query = {};
 
@@ -1548,9 +1476,6 @@ router.post('/getCharges', async (req, res) => {
     query = { where: { location: {} } };
     query.where.location = { [Op.in]: location };
   }
-
-  // console.log(query)
-
   try {
     const allAdmin = await Admin.findAll();
     const allOrder = await Order.findAll(query);
@@ -1558,17 +1483,14 @@ router.post('/getCharges', async (req, res) => {
       order: [['createdAt', 'DESC']],
     });
 
-    // console.log(allOrder)
-
     for (let a = 0; a < allCharges.length; a++) {
       let charges = allCharges[a].dataValues;
       let orderLocation = allOrder.filter((o) => o.oid === charges.oid)[0]
         ?.location;
 
-      // console.log(orderLocation)
       for (let l = 0; l < location.length; l++) {
         let userLocation = location[l];
-        // console.log(userLocation)
+   
         if (orderLocation === userLocation) {
           data.push({
             ...charges,
@@ -1678,8 +1600,6 @@ router.post('/reschedule', async (req, res) => {
       return res
         .status(400)
         .json({ error: 'Please complete the order delivery first.' });
-      // checkTask.status = "Collect"
-      // await checkTask.save()
     } else {
       const newReschedule = Reschedule.build({
         olddate: currentDate,
@@ -1693,7 +1613,7 @@ router.post('/reschedule', async (req, res) => {
     }
     const newInbox = Inbox.build({
       phone_number: checkOrder.phone_number,
-      title: `Laundry Notification - Your order #${checkOrder.oid} has been rescheduled!`,
+      title: `Notification - Your order #${checkOrder.oid} has been rescheduled!`,
       message: `Your collection date has been rescheduled to ${moment(
         newDate
       ).format(
@@ -1725,8 +1645,6 @@ router.post('/reschedule', async (req, res) => {
 // To GET CHARGES DETAIL TO TABLE
 router.post('/getReschedule', async (req, res) => {
   const { location, name } = req.body;
-  // console.log(req.body)
-
   let query = {};
 
   if (location && location.length) {
@@ -1760,7 +1678,7 @@ router.post('/getReschedule', async (req, res) => {
             taskId: checkTask ? checkTask.tid : '-',
             driverName: checkTask
               ? getAllDriver.filter((a) => a.oid === checkTask.operatorId)[0]
-                  .full_name
+                .full_name
               : '-',
             collectLockerId: checkTask ? checkTask.lockerId : '-',
             createdBy: allAdmin.filter((ad) => ad.id === data.adminId)[0]
@@ -1778,7 +1696,7 @@ router.post('/getReschedule', async (req, res) => {
           taskId: checkTask ? checkTask.tid : '-',
           driverName: checkTask
             ? getAllDriver.filter((a) => a.oid === checkTask.operatorId)[0]
-                .full_name
+              .full_name
             : '-',
           collectLockerId: checkTask ? checkTask.lockerId : '-',
           createdBy: allAdmin.filter((ad) => ad.id === data.adminId)[0]
@@ -1799,7 +1717,6 @@ router.post('/getReschedule', async (req, res) => {
 // CHECK DISCOUNT CODE IS VALID & CONDITIONS
 router.post('/checkDiscountCode', async (req, res) => {
   const { code, userId, serviceType, location } = req.body;
-  // console.log(code, userId, serviceType, location);
   try {
     const checkCode = await RedeemCode.findOne({
       where: {
@@ -1815,9 +1732,7 @@ router.post('/checkDiscountCode', async (req, res) => {
     let todayStart = new Date().setHours(0, 0, 0, 0);
     let todayEnd = new Date().setHours(23, 59, 59, 999);
 
-    // console.log('length: ', checkCode.discounts.filter(discount => discount.customerId).length)
-
-    // check location and service type
+  
     if (!checkCode) {
       return res.status(400).json({ error: 'Invalid Code' });
     } else if (
@@ -1833,42 +1748,36 @@ router.post('/checkDiscountCode', async (req, res) => {
       ).length >= checkCode.redeem_per_day &&
       checkCode.redeem_per_day !== 0
     ) {
-      // console.log('1')
       return res.status(400).json({ error: 'Code was fully redeemed' });
     } else if (
       checkCode.redeem_per_user !== 0 &&
       checkCode.discounts.filter((discount) => discount.customerId === userId)
         .length >= checkCode.redeem_per_user
     ) {
-      // console.log('2')
       return res.status(400).json({ error: 'Code was fully redeemed' });
     } else if (
       checkCode.redeem_per_month !== 0 &&
       checkCode.discounts.filter((discount) => discount.customerId).length >=
-        checkCode.redeem_per_month
+      checkCode.redeem_per_month
     ) {
-      // console.log('3')
       return res.status(400).json({ error: 'Code was fully redeemed' });
     } else if (
       checkCode.redeem_per_day !== 0 &&
       checkCode.discounts.filter((discount) => discount.customerId).length >=
-        checkCode.redeem_per_day
+      checkCode.redeem_per_day
     ) {
-      // console.log('4')
+
       return res.status(400).json({ error: 'Code was fully redeemed' });
     } else if (checkCode.locationUse && checkCode.serviceUse) {
-      // console.log("5");
       const checkLocation = checkCode.location.includes(location);
       const checkService = checkCode.service.includes(serviceType);
-      // console.log('Location', checkCode.location, location, checkLocation);
-      // console.log('Service', checkCode.service, serviceType, checkService);
+
       if (!checkLocation || !checkService) {
         return res
           .status(400)
           .json({ error: 'Code cannot be used in this location' });
       }
     } else if (checkCode.locationUse) {
-      // console.log("6");
       const checkLocation = checkCode.location.includes(location);
       if (!checkLocation) {
         return res
@@ -1876,7 +1785,6 @@ router.post('/checkDiscountCode', async (req, res) => {
           .json({ error: 'Code cannot be used in this location' });
       }
     } else if (checkCode.serviceUse) {
-      // console.log("7");
       const checkService = checkCode.service.includes(serviceType);
       if (!checkService) {
         return res
@@ -1892,156 +1800,111 @@ router.post('/checkDiscountCode', async (req, res) => {
   }
 });
 
-// let rule = new schedule.RecurrenceRule();
-// // rule.hour = 1;
-// rule.minute = 0;
-// rule.second = 0;
 
 {
   process.env.scheduler === 'yes'
     ? schedule.scheduleJob('*/5 * * * *', async (fireDate) => {
-        console.log(
-          'CHECK AND REMOVE UNPAID ORDER: ',
-          new Date(fireDate).toLocaleString('en-GB')
-        );
-        const halfHrBefore = new Date(new Date().getTime() - 30 * 60000);
-        try {
-          let todayDate = new Date().getDate();
-          /**
-  update order to cancel true
-    */
-          const query = {
-            payment: false,
-            createdAt: { [Op.lt]: halfHrBefore },
-            deposit_time: null,
-            cancel: false,
-          };
-          const allLockers = await Locker.findAll();
-          const foundDocs = await Order.findAll({
-            where: query,
-          });
-          for (a = 0; a < foundDocs.length; a++) {
-            const getLocker = await LockerDetails.findOne({
-              where: {
-                name: foundDocs[a].lockerId,
-                location: foundDocs[a].location,
-              },
-            });
-            if (getLocker) {
-              getLocker.reserved = false;
-              getLocker.booking = false;
-              foundDocs[a].cancel = true;
-
-              await foundDocs[a].save();
-              await getLocker.save();
-            } else {
-              console.log('Cant found Locker to update.');
-            }
-          }
-          const checkLog = await ActivityLog.findOne({
+      console.log(
+        'CHECK AND REMOVE UNPAID ORDER: ',
+        new Date(fireDate).toLocaleString('en-GB')
+      );
+      const halfHrBefore = new Date(new Date().getTime() - 30 * 60000);
+      try {
+        let todayDate = new Date().getDate();
+        /**
+update order to cancel true
+  */
+        const query = {
+          payment: false,
+          createdAt: { [Op.lt]: halfHrBefore },
+          deposit_time: null,
+          cancel: false,
+        };
+        const allLockers = await Locker.findAll();
+        const foundDocs = await Order.findAll({
+          where: query,
+        });
+        for (a = 0; a < foundDocs.length; a++) {
+          const getLocker = await LockerDetails.findOne({
             where: {
-              type: 'MonthlyReport',
-              createdAt: {
-                [Op.between]: [
-                  moment(new Date()).startOf('month').format(),
-                  moment(new Date()).endOf('month').format(),
-                ],
-              },
+              name: foundDocs[a].lockerId,
+              location: foundDocs[a].location,
             },
           });
-          if (todayDate === 1 && !checkLog) {
-            sendMonthlyReport();
-          } else {
-            console.log('no need sent monthly');
-          }
-        } catch (error) {
-          console.error('ERROR IN SCHEDULER');
-          console.error(error);
-        }
-      })
-    : '';
-}
+          if (getLocker) {
+            getLocker.reserved = false;
+            getLocker.booking = false;
+            foundDocs[a].cancel = true;
 
-process.env.scheduler === 'yes'
-  ? schedule.scheduleJob('*/5 * * * *', async () => {
-      try {
-        console.log('sync and check locker');
-        const allLockers = await Locker.findAll({
-          where: { status: true, deviceId: { [Op.eq]: null } },
+            await foundDocs[a].save();
+            await getLocker.save();
+          } else {
+            console.log('Cant found Locker to update.');
+          }
+        }
+        const checkLog = await ActivityLog.findOne({
+          where: {
+            type: 'MonthlyReport',
+            createdAt: {
+              [Op.between]: [
+                moment(new Date()).startOf('month').format(),
+                moment(new Date()).endOf('month').format(),
+              ],
+            },
+          },
         });
-        for (let a = 0; a < allLockers.length; a++) {
-          syncLockerSlot(allLockers[a].id, (status) => {
-            if (status === 'updated') {
-              SlackError(
-                `${allLockers[a].name} locker is online.`,
-                'Success',
-                () => {
-                  const message = `The ${allLockers[a].name} locker is online.`;
-                  sendSMS('', message, 'Online', (status) => {
-                    console.log(status);
-                  });
-                }
-              );
-            } else {
-              SlackError(
-                `Cannot sync the locker, the ${allLockers[a].name} locker is offline.`,
-                'Error',
-                () => {
-                  const message = `The ${allLockers[a].name} locker is offline.`;
-                  sendSMS('', message, 'Offline', (status) => {
-                    console.log(status);
-                  });
-                }
-              );
-            }
-          });
+        if (todayDate === 1 && !checkLog) {
+          sendMonthlyReport();
+        } else {
+          console.log('no need sent monthly');
         }
       } catch (error) {
         console.error('ERROR IN SCHEDULER');
         console.error(error);
       }
     })
-  : '';
+    : '';
+}
 
-// {
-//   process.env.scheduler === 'yes'
-//     ? schedule.scheduleJob('* * * * *', async () => {
-//         try {
-//           console.log('sync and check locker');
-//           const allLockers = await Locker.findAll({ where: { status: true } });
-//           for (let a = 0; a < allLockers.length; a++) {
-//             syncLockerSlot(allLockers[a].id, (status) => {
-//               if (status === 'updated') {
-//                 SlackError(
-//                   `${allLockers[a].name} locker is online.`,
-//                   'Success',
-//                   () => {
-//                     const message = `The ${allLockers[a].name} locker is online.`;
-//                     sendSMS('', message, 'Online', (status) => {
-//                       console.log(status);
-//                     });
-//                   }
-//                 );
-//               } else {
-//                 SlackError(
-//                   `Cannot sync the locker, the ${allLockers[a].name} locker is offline.`,
-//                   'Error',
-//                   () => {
-//                     const message = `The ${allLockers[a].name} locker is offline.`;
-//                     sendSMS('', message, 'Offline', (status) => {
-//                       console.log(status);
-//                     });
-//                   }
-//                 );
-//               }
-//             });
-//           }
-//         } catch (error) {
-//           console.error('ERROR IN SCHEDULER');
-//           console.error(error);
-//         }
-//       })
-//     : '';
-// }
+process.env.scheduler === 'yes'
+  ? schedule.scheduleJob('*/5 * * * *', async () => {
+    try {
+      console.log('sync and check locker');
+      const allLockers = await Locker.findAll({
+        where: { status: true, deviceId: { [Op.eq]: null } },
+      });
+      for (let a = 0; a < allLockers.length; a++) {
+        syncLockerSlot(allLockers[a].id, (status) => {
+          if (status === 'updated') {
+            SlackError(
+              `${allLockers[a].name} locker is online.`,
+              'Success',
+              () => {
+                const message = `The ${allLockers[a].name} locker is online.`;
+                sendSMS('', message, 'Online', (status) => {
+                  console.log(status);
+                });
+              }
+            );
+          } else {
+            SlackError(
+              `Cannot sync the locker, the ${allLockers[a].name} locker is offline.`,
+              'Error',
+              () => {
+                const message = `The ${allLockers[a].name} locker is offline.`;
+                sendSMS('', message, 'Offline', (status) => {
+                  console.log(status);
+                });
+              }
+            );
+          }
+        });
+      }
+    } catch (error) {
+      console.error('ERROR IN SCHEDULER');
+      console.error(error);
+    }
+  })
+  : '';
 
 module.exports = router;
